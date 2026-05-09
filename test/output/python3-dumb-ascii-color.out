@@ -153,6 +153,10 @@ AssertionError: [33;1massert[m baz == [31m90[m
 
 
 
+python3 test/test_file_logging.py
+
+
+
 python3 test/test_truncating.py
 
 
