@@ -153,10 +153,6 @@ AssertionError: assert baz == 90
 
 
 
-python3 test/test_file_logging.py
-
-
-
 python3 test/test_truncating.py
 
 

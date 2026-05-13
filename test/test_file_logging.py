@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 import logging
 import os
+import re
 import sys
 import tempfile
 
@@ -13,15 +14,18 @@ except ImportError:
 import better_exceptions
 
 
+ANSI_ESCAPE = re.compile(r'\x1b\[[0-9;]*m')
+
+
 def fail():
-    marker = 'keeps stream color only'
-    raise RuntimeError(marker)
+    value = 52
+    assert value == 90
 
 
-def main():
+def check_handler_order(stream_first):
     better_exceptions.SUPPORTS_COLOR = True
 
-    logger = logging.getLogger('better_exceptions_file_logging_test')
+    logger = logging.getLogger('better_exceptions_file_logging_test_{0}'.format(stream_first))
     logger.setLevel(logging.ERROR)
     logger.propagate = False
 
@@ -34,23 +38,31 @@ def main():
     os.close(fd)
     file_handler = logging.FileHandler(path)
 
-    logger.addHandler(stream_handler)
-    logger.addHandler(file_handler)
+    shared_formatter = logging.Formatter()
+    stream_handler.setFormatter(shared_formatter)
+    file_handler.setFormatter(shared_formatter)
+
+    handlers = [stream_handler, file_handler] if stream_first else [file_handler, stream_handler]
+    for handler in handlers:
+        logger.addHandler(handler)
 
     try:
         better_exceptions.hook()
         try:
             fail()
-        except RuntimeError:
+        except AssertionError:
             logger.exception('callback failed')
+
+        for handler in handlers:
+            handler.flush()
 
         stream_output = stream.getvalue()
         with open(path, 'r') as log:
             file_output = log.read()
 
-        assert '\x1b[' in stream_output
-        assert '\x1b[' not in file_output
-        assert 'keeps stream color only' in file_output
+        assert ANSI_ESCAPE.search(stream_output), stream_output
+        assert not ANSI_ESCAPE.search(file_output), file_output
+        assert 'assert value == 90' in file_output
     finally:
         sys.stderr = old_stderr
         logger.removeHandler(stream_handler)
@@ -58,6 +70,11 @@ def main():
         stream_handler.close()
         file_handler.close()
         os.remove(path)
+
+
+def main():
+    check_handler_order(stream_first=True)
+    check_handler_order(stream_first=False)
 
 
 if __name__ == '__main__':
